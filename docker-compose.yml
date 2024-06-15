@@ -1,0 +1,19 @@
+version: '3.8'
+
+# Used for production...
+services:
+  frontend:
+    image: node:20.13.1
+    working_dir: /app
+    env_file:
+      - .env
+    volumes:
+      - ./:/app
+    command: > 
+      bash -c "
+        npm install &&
+        npm run build &&
+        npm run preview
+      "
+    ports:
+      - "${CLIENT_EXPOSED_PORT}:3000"
