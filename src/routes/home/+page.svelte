@@ -15,6 +15,14 @@
     let totpEnabled = false;
     let createdAt = '';
 
+    let authenticated = false;
+    let deactivated = false;
+
+    /**
+	 * @type {any[]}
+	 */
+     let accessAttributes = []
+
     /**
 	 * @type {any[]}
 	 */
@@ -53,10 +61,21 @@
             email = data.userData.email;
             totpEnabled = data.userData.totpEnabled;
             createdAt = data.userData.createdAt;
+            accessAttributes = data.accessAttributes;
+            deactivated = data.userData.deactivated;
+            authenticated = data.userData.authenticated;
         });
         
     })
 
+    $: totpWarning = totpEnabled ? "text-warning-500" : "text-error-500";
+
+    import { ListBox, ListBoxItem } from '@skeletonlabs/skeleton';
+    let valueSingle = "home";
+
+    function routeTo(route ="/home") {
+        delayedNavigate(route, 20)
+    }
 </script>
 
 <div class="container h-full mx-auto justify-center items-center">
@@ -64,5 +83,76 @@
         <br>
         <h2 class="h2">Welcome back, {username}!</h2>
 
+        <h4 class="h4">Action Panels</h4>
+        <div class="card p-4">
+            <ListBox>
+                <ListBoxItem bind:group={valueSingle} name="medium" value="home">Home</ListBoxItem>
+                <ListBoxItem bind:group={valueSingle} on:click={() => routeTo("/settings")} name="medium" value="movies">Account Settings</ListBoxItem>
+                <ListBoxItem bind:group={valueSingle} on:click={() => routeTo("/logs")} name="medium" value="logs">View Logs</ListBoxItem>
+                <ListBoxItem bind:group={valueSingle} on:click={() => routeTo("/manage-users")} name="medium" value="users">Manage Users</ListBoxItem>
+                <ListBoxItem bind:group={valueSingle} on:click={() => routeTo("/manage-admins")} name="medium" value="admin">Manage Admins</ListBoxItem>
+                <ListBoxItem bind:group={valueSingle} on:click={() => routeTo("/manage-chat")} name="medium" value="chat">Manage Chat Configuration</ListBoxItem>
+            </ListBox>
+        </div>
+
+        <hr>
+
+        {#if !deactivated}
+            <p class="text-success-500">Account status is OK!</p>
+        {:else}
+            <div>
+                <p class="text-warning-500">This account is deactivated!</p>
+                <p class="text-warning-500">Contact higher admin for information.</p>
+            </div>
+        {/if}
+
+        {#if authenticated}
+            <p class="text-success-500">Account is authenticated!</p>
+        {:else}
+            <div>
+                <p class="text-warning-500">Account is not authenticated!</p>
+                <p class="text-warning-500">Change password in settings to get authenticated!</p>
+            </div>
+        {/if}
+
+        {#if totpEnabled}
+            <p class="text-success-500">You have TOTP enabled!</p>
+        {:else}
+            <div>
+                <p class="text-warning-500">You do not have TOTP Enabled!</p>
+                <p class="text-warning-500">Some actions cannot be performed unless you enable TOTP!</p>
+            </div>
+        {/if}
+
+        <h4 class="h4">Your Access Privileges</h4>
+        <div class="table-container">
+            <!-- Native Table Element -->
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>TOTP Required</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {#each accessAttributes as row}
+                        <tr>
+                            {#if row.totpRequired}
+                                <td class={totpWarning}>{row.access}</td>
+                            {:else}
+                                <td>{row.access}</td>
+                            {/if}
+                            {#if row.totpRequired}
+                                <td class={totpWarning}>Yes</td>
+                            {:else}
+                                <td>No</td>
+                            {/if}
+                        </tr>
+                    {/each}
+                </tbody>
+            </table>
+        </div>
+
+        <br>
     </div>
 </div>
