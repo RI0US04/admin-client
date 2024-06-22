@@ -96,9 +96,125 @@
      */
 	import { DataHandler } from '@vincjo/datatables';
 	import { getUsers } from '$lib/services/userManagement/getUsers';
+	import { changeUserStatus } from '$lib/services/userManagement/changeUserStatus';
+	import { revokeUserTOTP } from '$lib/services/userManagement/revokeUserTotp';
+	import { revokeUserVerification } from '$lib/services/userManagement/revokeUserVerification';
 
 	$: handler = new DataHandler(users, { rowsPerPage: 50 });
 	$: rows = handler.getRows();
+
+    /**
+	 * @param {string} userID
+	 * @param {string} status
+	 */
+    async function triggerChangeUserStatus(userID, status) {
+        console.debug("Change User Status ::", userID, status)
+        loadingAPI = true;
+        const data = await changeUserStatus(userID, status);
+        loadingAPI = false;
+
+        const responseStatus = data.status;
+        if (responseStatus !== "SUCCESS") {
+            toastStore.trigger({
+                message: 'An unexpected error occurred!',
+                timeout: 3000,
+                background: 'variant-filled-error',
+            });
+            return;
+        }
+
+        const index = users.findIndex(user => user.id === userID);
+
+        if (index >= 0) {
+            users[index] = { ...users[index], status: status };
+        }
+
+        toastStore.trigger({
+            message: 'User status changed successfully!',
+            timeout: 3000,
+            background: 'variant-filled-success',
+        });
+    }
+
+        /**
+	 * @param {string} userID
+	 */
+     async function triggerDisableVerification(userID) {
+        loadingAPI = true;
+        const data = await revokeUserVerification(userID);
+        loadingAPI = false;
+
+        const responseStatus = data.status;
+         if (responseStatus !== "SUCCESS" && responseStatus !== "USER_NOT_AUTHENTICATED") {
+            toastStore.trigger({
+                message: 'An unexpected error occurred!',
+                timeout: 3000,
+                background: 'variant-filled-error',
+            });
+            return;
+        }
+
+        const index = users.findIndex(user => user.id === userID);
+
+        if (index >= 0) {
+            users[index] = { ...users[index], totpEnabled: false };
+        }
+
+        if (responseStatus === "USER_NOT_AUTHENTICATED") {
+            toastStore.trigger({
+                message: 'User is not yet verified!',
+                timeout: 3000,
+                background: 'variant-filled-warning',
+            });
+            return;
+        }
+
+        toastStore.trigger({
+            message: 'TOTP disabled changed successfully!',
+            timeout: 3000,
+            background: 'variant-filled-success',
+        });
+    }
+
+    /**
+	 * @param {string} userID
+	 */
+    async function triggerDisableTOTP(userID) {
+        loadingAPI = true;
+        const data = await revokeUserTOTP(userID);
+        loadingAPI = false;
+
+        const responseStatus = data.status;
+         if (responseStatus !== "SUCCESS" && responseStatus !== "USER_NOT_TOTP_ENABLED") {
+            toastStore.trigger({
+                message: 'An unexpected error occurred!',
+                timeout: 3000,
+                background: 'variant-filled-error',
+            });
+            return;
+        }
+
+        const index = users.findIndex(user => user.id === userID);
+
+        if (index >= 0) {
+            users[index] = { ...users[index], totpEnabled: false };
+        }
+
+        if (responseStatus === "USER_NOT_TOTP_ENABLED") {
+            toastStore.trigger({
+                message: 'User TOTP is already disabed!',
+                timeout: 3000,
+                background: 'variant-filled-warning',
+            });
+            return;
+        }
+
+        toastStore.trigger({
+            message: 'TOTP disabled changed successfully!',
+            timeout: 3000,
+            background: 'variant-filled-success',
+        });
+    }
 </script>
 
 <div class="container h-full mx-auto">
@@ -120,9 +236,9 @@
                         <ThSort {handler} orderBy="username">Username</ThSort>
                         <ThSort {handler} orderBy="email">Email</ThSort>
                         <ThSort {handler} orderBy="status">Status</ThSort>
-                        <ThSort {handler} orderBy="authenticated">Authenticated</ThSort>
-                        <ThSort {handler} orderBy="token">Token Count</ThSort>
+                        <ThSort {handler} orderBy="authenticated">Email Verified</ThSort>
                         <ThSort {handler} orderBy="totpEnabled">TOTP Enabled</ThSort>
+                        <ThSort {handler} orderBy="token">Token Count</ThSort>
                         <ThSort {handler} orderBy="createdAt">Created At</ThSort>
                     </tr>
                     <tr>
@@ -131,8 +247,8 @@
                         <ThFilter {handler} filterBy="email" />
                         <ThFilter {handler} filterBy="status" />
                         <ThFilter {handler} filterBy="authenticated" />
-                        <ThFilter {handler} filterBy="token" />
                         <ThFilter {handler} filterBy="totpEnabled" />
+                        <ThFilter {handler} filterBy="token" />
                         <ThFilter {handler} filterBy="createdAt" />
                     </tr>
                 </thead>
@@ -141,11 +257,48 @@
                         <tr>
                             <td>{row.id}</td>
                             <td>{row.username}</td>
-                            <td>{row.status}</td>
                             <td>{row.email}</td>
-                            <td>{row.authenticated}</td>
+
+                            <!--Status-->
+                            {#if canChangeStatus}
+                                <td>
+                                    <select disabled={loadingAPI} on:change={(e) => triggerChangeUserStatus(row.id, e.target.value)} class="select" value={row.status}>
+                                        <option value="OK">Ok</option>
+                                        <option value="LOCKED">Locked</option>
+                                        <option value="BANNED">Banned</option>
+                                    </select>
+                                </td>
+                            {:else}
+                                <td>{row.status}</td>
+                            {/if}
+
+                            <!--Email Verification-->
+                            {#if canRevokeVerification}
+                                <td>
+                                    {#if row.authenticated}
+                                        <button type="button" on:click={() => triggerDisableVerification(row.id)} disabled={loadingAPI} class="btn variant-filled-warning">Revoke Verification</button>
+                                    {:else}
+                                        <button type="button" disabled={true} class="btn variant-filled">Not Verified</button>
+                                    {/if}
+                                </td>
+                            {:else}
+                                <td>{row.authenticated}</td>
+                            {/if}
+                            
+                            <!--TOTP-->
+                            {#if canRevokeTOTP}
+                                <td>
+                                    {#if row.totpEnabled}
+                                        <button type="button" on:click={() => triggerDisableTOTP(row.id)} disabled={loadingAPI} class="btn variant-filled-warning">Revoke TOTP</button>
+                                    {:else}
+                                        <button type="button" disabled={true} class="btn variant-filled">TOTP Disabled</button>
+                                    {/if}
+                                </td>
+                            {:else}
+                                <td>{row.totpEnabled}</td>
+                            {/if}
+
                             <td>{row.token}</td>
-                            <td>{row.totpEnabled}</td>
                             <td>{new Date(row.createdAt)}</td>
                         </tr>
                     {/each}
