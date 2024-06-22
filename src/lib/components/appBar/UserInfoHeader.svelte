@@ -23,6 +23,8 @@
 <!-- svelte-ignore a11y-no-noninteractive-tabindex -->
 <!-- svelte-ignore a11y-no-static-element-interactions -->
 <div class="horizontal-stack">
+	<button type="button" class="btn variant-ghost-surface" on:click={() => delayedNavigate('/home', 50)}>Home Page</button>
+
 	<!-- svelte-ignore a11y-click-events-have-key-events -->
 	<!-- svelte-ignore a11y-no-noninteractive-tabindex -->
 	<div class="avatar-container" on:click={gotoSettings} tabindex="0">

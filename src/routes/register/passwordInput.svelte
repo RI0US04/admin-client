@@ -36,16 +36,18 @@
 	}
 
 	function handleBlur() {
-		const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d!@#$%^&*()-_=+`~[\]{}\\|;:'",.<>/?]{8,72}$/;
+		var pattern = new RegExp(
+          "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[-+_!@#$%^&*.,?]).+$"
+        );
 		if (value.length === 0) {
 			error = 'Password is required';
 		} else if (value.length < 8) {
 			error = 'Password must be at least 8 characters long';
 		} else if (value.length > 72) {
 			error = 'Password should not be longer than 72 characters!';
-		} else if (!passwordRegex.test(value)) {
+		} else if (!pattern.test(value)) {
 			error =
-				'Password must contain at least one letter and one number!';
+				'Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character!';
 		} else {
 			error = '';
 		}
