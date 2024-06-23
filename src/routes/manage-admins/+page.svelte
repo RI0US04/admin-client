@@ -3,40 +3,55 @@
     const toastStore = getToastStore()
 
 	import { onMount } from 'svelte';
-	import { getSessionCookie, setSessionCookie } from '$lib/cookies/sessionCookie';
-	import { getUsernameCookie, setUsernameCookie } from '$lib/cookies/usernameCookie';
+	import { getSessionCookie } from '$lib/cookies/sessionCookie';
+	import { getUsernameCookie } from '$lib/cookies/usernameCookie';
 	import delayedNavigate from '$lib/delayedNavigate';
-	import { getLogs } from '$lib/services/getLogs';
-	import Datatable from '$lib/components/logTable/Datatable.svelte';
-    import { ListBox, ListBoxItem } from '@skeletonlabs/skeleton';
+
+    let possiblePrivileges = {
+        SET_USER_TOKEN: -1,
+        CHANGE_USER_STATUS: -2,
+        REVOKE_USER_SESSIONS: -3,
+        REVOKE_USER_TOTP: -4,
+        REVOKE_USER_VERIFICATION_STATUS: -5,
+        VIEW_ADMIN_LOGS: -6,
+        DEACTIVATE_ADMIN_ACCOUNT: 1,
+        CREATE_ADMIN_ACCOUNT: 2,
+        CHANGE_ADMIN_ACTIVATION_STATUS: 3,
+        MODIFY_ADMIN_ACCESS_ATTRIBUTE: 4,
+        REVOKE_ADMIN_SESSIONS: 5,
+        REVOKE_ADMIN_2FA: 6,
+        REVOKE_ADMIN_VERIFICATION: 7
+    }
 
     /**
      * @type {any[]}
      */
-    let users = [];
+    let admins = [];
     let canSetTokens = false;
     let canRevokeTOTP = false;
     let canRevokeSessions = false;
     let canRevokeVerification = false;
-    let canChangeStatus = false;
+    let canChangeAccess = false;
+    let canDeactivateAccount = false;
 
     let loadingAPI = false;
 
-    async function requestUsers(forceRefresh = false) {
+    async function requestAdminList(forceRefresh = false) {
         loadingAPI = true;
-        const data = await getUsers(forceRefresh);
+        const data = await getAdmins(forceRefresh);
         loadingAPI = false;
 
         const status = data.status;
         if (status === "SUCCESS") {
-            users = data.users;
-            console.debug("Logs ::", users)
+            admins = data.admins;
+            console.debug("Logs ::", admins)
 
             canSetTokens = data.canSetTokens;
             canRevokeTOTP = data.canRevokeTOTP;
             canRevokeSessions = data.canRevokeSessions;
             canRevokeVerification = data.canRevokeVerification;
-            canChangeStatus = data.canChangeStatus;
+            canChangeAccess = data.canChangeAccess;
+            canDeactivateAccount = data.canDeactivateAccount
             return;
         }
 
@@ -80,7 +95,7 @@
             return
         }
 
-        requestUsers();
+        requestAdminList();
     });
 
 	//Import local datatable components
@@ -95,22 +110,18 @@
      * @type {any[]}
      */
 	import { DataHandler } from '@vincjo/datatables';
-	import { getUsers } from '$lib/services/userManagement/getUsers';
-	import { changeUserStatus } from '$lib/services/userManagement/changeUserStatus';
-	import { revokeUserTOTP } from '$lib/services/userManagement/revokeUserTotp';
-	import { revokeUserVerification } from '$lib/services/userManagement/revokeUserVerification';
+	import { getAdmins } from '$lib/services/adminManagement/getAdmins';
+	import { changeAdminStatus } from '$lib/services/adminManagement/changeAdminStatus';
+	import { revokeAdminVerification } from '$lib/services/adminManagement/revokeAdminVerification';
+	import { revokeAdminTOTP } from '$lib/services/adminManagement/revokeAdminTotp';
+	import { toggleAccessAttribute } from '$lib/services/adminManagement/toggleAccessAttribute';
 
-	$: handler = new DataHandler(users, { rowsPerPage: 50 });
+	$: handler = new DataHandler(admins, { rowsPerPage: 50 });
 	$: rows = handler.getRows();
 
-    /**
-	 * @param {string} userID
-	 * @param {string} status
-	 */
-    async function triggerChangeUserStatus(userID, status) {
-        console.debug("Change User Status ::", userID, status)
+    async function triggerToggleAccessControl(userID, privilege) {
         loadingAPI = true;
-        const data = await changeUserStatus(userID, status);
+        const data = await toggleAccessAttribute(userID, privilege);
         loadingAPI = false;
 
         const responseStatus = data.status;
@@ -123,14 +134,62 @@
             return;
         }
 
-        const index = users.findIndex(user => user.id === userID);
+        const index = admins.findIndex(user => user.id === userID);
 
         if (index >= 0) {
-            users[index] = { ...users[index], status: status };
+            const admin = admins[index];
+            let adminPrivileges = admin.accessAttributes;
+
+            // Check if the integer exists in adminPrivileges
+            const indexInPrivileges = adminPrivileges.indexOf(privilege);
+            
+            if (indexInPrivileges === -1) {
+                // If the integer doesn't exist, add it
+                adminPrivileges.push(privilege);
+            } else {
+                // If the integer exists, remove it
+                adminPrivileges.splice(indexInPrivileges, 1);
+            }
+
+            // Update the admins[index] with the modified accessAttributes
+            admins[index] = { ...admin, accessAttributes: adminPrivileges };
         }
 
         toastStore.trigger({
-            message: 'User status changed successfully!',
+            message: 'Admin access control changed successfully!',
+            timeout: 3000,
+            background: 'variant-filled-success',
+        });
+    }
+
+    /**
+	 * @param {string} userID
+	 * @param {string} status
+	 */
+    async function triggerChangeUserStatus(userID, status) {
+        console.debug("Change User Status ::", userID, status)
+        loadingAPI = true;
+        const data = await changeAdminStatus(userID, status);
+        loadingAPI = false;
+
+        const responseStatus = data.status;
+        if (responseStatus !== "SUCCESS") {
+            toastStore.trigger({
+                message: 'An unexpected error occurred!',
+                timeout: 3000,
+                background: 'variant-filled-error',
+            });
+            return;
+        }
+
+        const index = admins.findIndex(user => user.id === userID);
+
+        if (index >= 0) {
+            admins[index] = { ...admins[index], status: status };
+        }
+
+        toastStore.trigger({
+            message: 'Admin status changed successfully!',
             timeout: 3000,
             background: 'variant-filled-success',
         });
@@ -141,11 +200,11 @@
 	 */
      async function triggerDisableVerification(userID) {
         loadingAPI = true;
-        const data = await revokeUserVerification(userID);
+        const data = await revokeAdminVerification(userID);
         loadingAPI = false;
 
         const responseStatus = data.status;
-         if (responseStatus !== "SUCCESS" && responseStatus !== "USER_NOT_AUTHENTICATED") {
+         if (responseStatus !== "SUCCESS" && responseStatus !== "VERIFICATION_DISABLED") {
             toastStore.trigger({
                 message: 'An unexpected error occurred!',
                 timeout: 3000,
@@ -154,15 +213,15 @@
             return;
         }
 
-        const index = users.findIndex(user => user.id === userID);
+        const index = admins.findIndex(user => user.id === userID);
 
         if (index >= 0) {
-            users[index] = { ...users[index], authenticated: false };
+            admins[index] = { ...admins[index], authenticated: false };
         }
 
-        if (responseStatus === "USER_NOT_AUTHENTICATED") {
+        if (responseStatus === "VERIFICATION_DISABLED") {
             toastStore.trigger({
-                message: 'User is not yet verified!',
+                message: 'Admin is not yet verified!',
                 timeout: 3000,
                 background: 'variant-filled-warning',
             });
@@ -170,7 +229,7 @@
         }
 
         toastStore.trigger({
-            message: 'User unverified successfully!',
+            message: 'Verification disabled changed successfully!',
             timeout: 3000,
             background: 'variant-filled-success',
         });
@@ -181,11 +240,11 @@
 	 */
     async function triggerDisableTOTP(userID) {
         loadingAPI = true;
-        const data = await revokeUserTOTP(userID);
+        const data = await revokeAdminTOTP(userID);
         loadingAPI = false;
 
         const responseStatus = data.status;
-         if (responseStatus !== "SUCCESS" && responseStatus !== "USER_NOT_TOTP_ENABLED") {
+         if (responseStatus !== "SUCCESS" && responseStatus !== "TOTP_DISABLED") {
             toastStore.trigger({
                 message: 'An unexpected error occurred!',
                 timeout: 3000,
@@ -194,15 +253,15 @@
             return;
         }
 
-        const index = users.findIndex(user => user.id === userID);
+        const index = admins.findIndex(user => user.id === userID);
 
         if (index >= 0) {
-            users[index] = { ...users[index], totpEnabled: false };
+            admins[index] = { ...admins[index], totpEnabled: false };
         }
 
-        if (responseStatus === "USER_NOT_TOTP_ENABLED") {
+        if (responseStatus === "TOTP_DISABLED") {
             toastStore.trigger({
-                message: 'User TOTP is already disabed!',
+                message: 'Admin TOTP is already disabed!',
                 timeout: 3000,
                 background: 'variant-filled-warning',
             });
@@ -215,13 +274,19 @@
             background: 'variant-filled-success',
         });
     }
+
+    /**
+	 * @param {any[]} adminPrivileges
+	 * @param {any} privilegeValue
+	 */
+    function hasPrivilege(adminPrivileges, privilegeValue) {
+        return adminPrivileges.includes(privilegeValue);
+    }
 </script>
 
 <div class="container h-full mx-auto">
 	<div class="space-y-10">
         <br>
-        <h2 class="h2">List automatically updates every 5 minutes.</h2>
-        <button type="button" on:click={() => requestUsers(true)} disabled={loadingAPI} class="btn variant-filled-warning">Force Refresh</button>
         <div class=" overflow-x-auto space-y-4">
             <!-- Header -->
             <header class="flex justify-between gap-4">
@@ -238,7 +303,7 @@
                         <ThSort {handler} orderBy="status">Status</ThSort>
                         <ThSort {handler} orderBy="authenticated">Email Verified</ThSort>
                         <ThSort {handler} orderBy="totpEnabled">TOTP Enabled</ThSort>
-                        <ThSort {handler} orderBy="token">Token Count</ThSort>
+                        <ThSort {handler} orderBy="accessAttributes">Access Privileges</ThSort>
                         <ThSort {handler} orderBy="createdAt">Created At</ThSort>
                     </tr>
                     <tr>
@@ -248,7 +313,7 @@
                         <ThFilter {handler} filterBy="status" />
                         <ThFilter {handler} filterBy="authenticated" />
                         <ThFilter {handler} filterBy="totpEnabled" />
-                        <ThFilter {handler} filterBy="token" />
+                        <ThFilter {handler} filterBy="accessAttributes" />
                         <ThFilter {handler} filterBy="createdAt" />
                     </tr>
                 </thead>
@@ -260,12 +325,11 @@
                             <td>{row.email}</td>
 
                             <!--Status-->
-                            {#if canChangeStatus}
+                            {#if canDeactivateAccount}
                                 <td>
-                                    <select disabled={loadingAPI} on:change={(e) => triggerChangeUserStatus(row.id, e.target.value)} class="select" value={row.status}>
+                                    <select disabled={loadingAPI || row.username == getUsernameCookie()} on:change={(e) => triggerChangeUserStatus(row.id, e.target.value)} class="select" value={row.status}>
                                         <option value="OK">Ok</option>
-                                        <option value="LOCKED">Locked</option>
-                                        <option value="BANNED">Banned</option>
+                                        <option value="DEACTIVATED">Deactivated</option>
                                     </select>
                                 </td>
                             {:else}
@@ -276,7 +340,7 @@
                             {#if canRevokeVerification}
                                 <td>
                                     {#if row.authenticated}
-                                        <button type="button" on:click={() => triggerDisableVerification(row.id)} disabled={loadingAPI} class="btn variant-filled-warning">Revoke Verification</button>
+                                        <button type="button" on:click={() => triggerDisableVerification(row.id)} disabled={loadingAPI || row.username == getUsernameCookie()} class="btn variant-filled-warning">Revoke Verification</button>
                                     {:else}
                                         <button type="button" disabled={true} class="btn variant-filled">Not Verified</button>
                                     {/if}
@@ -289,7 +353,7 @@
                             {#if canRevokeTOTP}
                                 <td>
                                     {#if row.totpEnabled}
-                                        <button type="button" on:click={() => triggerDisableTOTP(row.id)} disabled={loadingAPI} class="btn variant-filled-warning">Revoke TOTP</button>
+                                        <button type="button" on:click={() => triggerDisableTOTP(row.id)} disabled={loadingAPI || row.username == getUsernameCookie()} class="btn variant-filled-warning">Revoke TOTP</button>
                                     {:else}
                                         <button type="button" disabled={true} class="btn variant-filled">TOTP Disabled</button>
                                     {/if}
@@ -298,7 +362,32 @@
                                 <td>{row.totpEnabled}</td>
                             {/if}
 
-                            <td>{row.token}</td>
+                            <!--Access Privileges-->
+                            <td>
+                                {#if canChangeAccess}
+                                    {#each Object.entries(possiblePrivileges) as [privilege, value]}
+                                        <button
+                                            class="chip mt-2 mr-2 {hasPrivilege(row.accessAttributes, value) ? 'variant-filled-success' : 'variant-soft'}"
+                                            on:click={() => { triggerToggleAccessControl(row.id, value); }}
+                                            on:keypress
+                                            disabled={loadingAPI || row.username == getUsernameCookie()}
+                                        >
+                                            <span class="capitalize">{privilege.replace(/_/g, ' ')}</span>
+                                        </button>
+                                    {/each}
+                                {:else}
+                                    {#each Object.entries(possiblePrivileges) as [privilege, value]}
+                                        <button
+                                            class="chip {hasPrivilege(row.accessAttributes, value) ? 'variant-filled-success' : 'variant-soft'}"
+                                            on:click={() => { console.debug("TODO!"); }}
+                                            disabled={true || row.username == getUsernameCookie()}
+                                            on:keypress
+                                        >
+                                            <span class="capitalize">{privilege.replace(/_/g, ' ')}</span>
+                                        </button>
+                                    {/each}
+                                {/if}
+                            </td>
                             <td>{new Date(row.createdAt)}</td>
                         </tr>
                     {/each}

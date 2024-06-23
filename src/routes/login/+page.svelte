@@ -76,7 +76,7 @@
 				setSessionCookie(result.token, 30)
 
 				const t = {
-					message: 'Successfully logged in! Redirecting to chat...',
+					message: 'Successfully logged in! Redirecting to home page...',
 					timeout: 2000,
 					background: 'variant-filled-success'
 				};
@@ -103,7 +103,7 @@
 				toastStore.trigger(t);
 			} else if (result.status === 'LOCKED') {
 				const t = {
-					message: 'Your account was locked out! Try contacting admin.',
+					message: 'This admin account is disabled...',
 					timeout: 10000,
 					background: 'variant-filled-warning'
 				};

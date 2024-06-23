@@ -108,7 +108,7 @@
                 <ListBoxItem class={globalListBoxTextClass} disabled={deactivated || !authenticated} bind:group={valueSingle} on:click={() => routeTo("/logs")} name="medium" value="logs">View Logs</ListBoxItem>
                 <ListBoxItem class={globalListBoxTextClass} disabled={deactivated || !authenticated} bind:group={valueSingle} on:click={() => routeTo("/manage-users")} name="medium" value="users">Manage Users</ListBoxItem>
                 <ListBoxItem class={listBoxTextClass} disabled={!totpEnabled || deactivated || !authenticated} bind:group={valueSingle} on:click={() => routeTo("/manage-admins")} name="medium" value="admin">Manage Admins</ListBoxItem>
-                <ListBoxItem class={listBoxTextClass} disabled={!hasAccessTo("CREATE_ADMIN_ACCOUNT") || deactivated || !authenticated} bind:group={valueSingle} on:click={() => routeTo("/register-admin")} name="medium" value="register-admin">Register new admin</ListBoxItem>
+                <ListBoxItem class={!hasAccessTo("CREATE_ADMIN_ACCOUNT") ? "text-error-500" : listBoxTextClass} disabled={!hasAccessTo("CREATE_ADMIN_ACCOUNT") || deactivated || !authenticated} bind:group={valueSingle} on:click={() => routeTo("/register-admin")} name="medium" value="register-admin">Register new admin</ListBoxItem>
             </ListBox>
         </div>
 
