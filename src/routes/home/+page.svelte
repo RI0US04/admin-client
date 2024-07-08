@@ -5,8 +5,8 @@
     const modalStore = getModalStore();
 
     import { onMount } from 'svelte';
-	import { getSessionCookie } from '$lib/cookies/sessionCookie';
-	import { getUsernameCookie } from '$lib/cookies/usernameCookie';
+	import { getSessionCookie, removeSessionCookie } from '$lib/cookies/sessionCookie';
+	import { getUsernameCookie, removeUsernameCookie } from '$lib/cookies/usernameCookie';
 	import delayedNavigate from '$lib/delayedNavigate';
 	import { getUserInformation } from '$lib/services/settings/getUserInformation';
 
@@ -71,6 +71,7 @@
     $: totpWarning = totpEnabled ? "text-primary-500" : "text-warning-500";
 
     import { ListBox, ListBoxItem } from '@skeletonlabs/skeleton';
+	import { requestLogout } from '$lib/requestLogout';
     let valueSingle = "home";
 
     function routeTo(route ="/home") {
@@ -91,6 +92,13 @@
         }
     }
 
+    function triggerLogout() {
+        requestLogout();
+        removeSessionCookie();
+        removeUsernameCookie();
+        delayedNavigate('/login', 20)
+    }
+
     $: globalListBoxTextClass = authenticated && !deactivated ? "text-success-500" : "text-error-500";
     $: listBoxTextClass =  authenticated && !deactivated ? (totpEnabled ? "text-success-500" : "text-warning-500") : "text-error-500";
 </script>
@@ -109,6 +117,7 @@
                 <ListBoxItem class={globalListBoxTextClass} disabled={deactivated || !authenticated} bind:group={valueSingle} on:click={() => routeTo("/manage-users")} name="medium" value="users">Manage Users</ListBoxItem>
                 <ListBoxItem class={listBoxTextClass} disabled={!totpEnabled || deactivated || !authenticated} bind:group={valueSingle} on:click={() => routeTo("/manage-admins")} name="medium" value="admin">Manage Admins</ListBoxItem>
                 <ListBoxItem class={!hasAccessTo("CREATE_ADMIN_ACCOUNT") ? "text-error-500" : listBoxTextClass} disabled={!hasAccessTo("CREATE_ADMIN_ACCOUNT") || deactivated || !authenticated} bind:group={valueSingle} on:click={() => routeTo("/register-admin")} name="medium" value="register-admin">Register new admin</ListBoxItem>
+                <ListBoxItem bind:group={valueSingle} on:click={triggerLogout} name="medium" value="logout">Logout</ListBoxItem>
             </ListBox>
         </div>
 
